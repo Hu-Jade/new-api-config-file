@@ -1,4 +1,4 @@
-﻿# init.ps1 - New API 项目初次配置脚本
+﻿# init.ps1 - New API 项目初次配置脚本（修复版：自动处理源码端口冲突）
 # 用法：在项目根目录 (new-api/) 下执行 .\init.ps1
 
 Write-Host "🚀 开始初始化 New API 项目配置..." -ForegroundColor Cyan
@@ -45,13 +45,12 @@ ENABLE_RESPONSE_LOGS=false
 "@
 [IO.File]::WriteAllText("$PWD\.env", $envContent.Trim(), $utf8NoBom)
 
-# 4️⃣ 生成 docker-compose.override.yml
+# 4️⃣ 生成 docker-compose.override.yml（关键：使用变量 + 确保端口覆盖）
 Write-Host "🐳 生成 docker-compose.override.yml..." -ForegroundColor Yellow
 $overrideContent = @'
-version: '3.8'
-
 services:
   new-api:
+    # 关键：使用变量映射端口，默认 9528
     ports:
       - "${HOST_PORT:-9528}:3000"
     environment:
@@ -78,16 +77,15 @@ networks:
 '@
 Set-Content -Path "docker-compose.override.yml" -Value $overrideContent -Encoding UTF8NoBOM -Force
 
-# 5️⃣ 生成基础 docker-compose.yml（如果不存在）
-if (-not (Test-Path "docker-compose.yml")) {
-    Write-Host "📋 生成基础 docker-compose.yml..." -ForegroundColor Yellow
-    $baseContent = @'
-version: '3.8'
+# 5️⃣ 生成或修复 docker-compose.yml（关键：确保不包含硬编码端口）
+Write-Host "📋 处理 docker-compose.yml..." -ForegroundColor Yellow
 
+$baseContent = @'
 services:
   new-api:
     image: ghcr.io/quantumnous/new-api:latest
     container_name: new-api
+    # 注意：端口由 docker-compose.override.yml 控制，此处不定义
     networks:
       - new-api-network
 
@@ -95,15 +93,40 @@ networks:
   new-api-network:
     driver: bridge
 '@
+
+if (-not (Test-Path "docker-compose.yml")) {
+    # 情况1：文件不存在，直接创建干净版本
     Set-Content -Path "docker-compose.yml" -Value $baseContent -Encoding UTF8NoBOM -Force
+    Write-Host "   ✓ 创建新的 docker-compose.yml" -ForegroundColor Green
+} else {
+    # 情况2：文件已存在（用户克隆了源码），自动修复硬编码端口
+    Write-Host "   ⚠️ 检测到现有 docker-compose.yml，正在修复端口冲突..." -ForegroundColor Yellow
+    
+    $originalContent = Get-Content -Path "docker-compose.yml" -Raw
+    
+    # 备份原文件
+    Copy-Item -Path "docker-compose.yml" -Destination "docker-compose.yml.bak" -Force
+    
+    # 注释掉所有硬编码的 3000:3000 或 "3000:3000" 端口映射
+    $fixedContent = $originalContent -replace '(^\s*-?\s*["\']?3000:3000["\']?\s*$)|(^.*ports:\s*$)', '# $0'
+    
+    # 如果检测不到 new-api 服务，追加基础配置
+    if ($originalContent -notmatch 'new-api:') {
+        $fixedContent += "`n" + $baseContent
+    }
+    
+    Set-Content -Path "docker-compose.yml" -Value $fixedContent -Encoding UTF8NoBOM -Force
+    Write-Host "   ✓ 已注释硬编码端口，备份保存为: docker-compose.yml.bak" -ForegroundColor Green
 }
 
-# 6️⃣ 配置 .gitignore
+# 6️⃣ 配置 .gitignore（确保自定义配置不被提交）
 Write-Host "🔐 配置 .gitignore..." -ForegroundColor Yellow
 $gitignoreRules = @"
-# === Local setup & personal configs (NEVER commit) ===
+
+# === New API 本地配置 (NEVER commit) ===
 .env
 docker-compose.override.yml
+docker-compose.yml.bak
 data/
 logs/
 *.db
@@ -112,9 +135,13 @@ logs/
 "@
 # 如果 .gitignore 不存在则创建，存在则追加（避免重复）
 if (-not (Test-Path ".gitignore")) {
-    Set-Content -Path ".gitignore" -Value $gitignoreRules -Encoding UTF8NoBOM -Force
+    Set-Content -Path ".gitignore" -Value "# Git ignore for New API`n$gitignoreRules" -Encoding UTF8NoBOM -Force
 } else {
-    Add-Content -Path ".gitignore" -Value "`n$gitignoreRules" -Encoding UTF8NoBOM
+    # 检查是否已包含关键规则，避免重复
+    $existing = Get-Content -Path ".gitignore" -Raw
+    if ($existing -notmatch "docker-compose.override.yml") {
+        Add-Content -Path ".gitignore" -Value $gitignoreRules -Encoding UTF8NoBOM
+    }
 }
 
 # 7️⃣ 输出结果
