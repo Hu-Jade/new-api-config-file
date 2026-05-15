@@ -28,11 +28,24 @@ if (-not $KeepData) {
     Write-Host "💾 已保留数据目录 (data/, logs/) 和配置文件" -ForegroundColor Green
 }
 
-# 3. 删除镜像
-Write-Host "🖼️  删除 New API 镜像..." -ForegroundColor Cyan
-docker rmi ghcr.io/quantumnous/new-api:latest -ErrorAction SilentlyContinue
-# 也尝试删除可能的其他标签
-docker rmi justsong/new-api:latest -ErrorAction SilentlyContinue
+# 3. 删除镜像（修复：使用 PowerShell 错误处理）
+Write-Host "🖼️  删除 New API 相关镜像..." -ForegroundColor Cyan
+
+# 方法1：使用 2>$null 重定向错误输出
+docker rmi ghcr.io/quantumnous/new-api:latest 2>$null
+docker rmi justsong/new-api:latest 2>$null
+docker rmi calciumion/new-api:latest 2>$null
+
+# 删除相关的 redis 和 postgres 镜像（如果不再需要）
+$confirmRedis = Read-Host "📦 是否同时删除 redis 镜像？(y/n)"
+if ($confirmRedis -eq "y" -or $confirmRedis -eq "Y") {
+    docker rmi redis:latest 2>$null
+}
+
+$confirmPostgres = Read-Host "📦 是否同时删除 postgres 镜像？(y/n)"
+if ($confirmPostgres -eq "y" -or $confirmPostgres -eq "Y") {
+    docker rmi postgres:15 2>$null
+}
 
 # 4. 清理系统残留
 Write-Host "🧹 清理 Docker 系统残留..." -ForegroundColor Cyan
