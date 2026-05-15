@@ -34,7 +34,7 @@ REGISTER_ENABLED=false
 PASSWORD_LOGIN_ENABLED=true
 
 # 服务器端口（容器内固定 3000，此处配置宿主机映射端口）
-HOST_PORT=3000
+HOST_PORT=9528
 
 # 日志级别
 LOG_LEVEL=info
@@ -53,7 +53,7 @@ version: '3.8'
 services:
   new-api:
     ports:
-      - "${HOST_PORT:-3000}:3000"
+      - "${HOST_PORT:-9528}:3000"
     environment:
       - TZ=${TZ}
       - SESSION_SECRET=${SESSION_SECRET}
@@ -127,8 +127,8 @@ Write-Host "🔑 您的 SESSION_SECRET (请妥善保存):" -ForegroundColor Cyan
 Write-Host "   $generatedSecret" -ForegroundColor White
 Write-Host " "
 Write-Host "🌐 服务访问信息:" -ForegroundColor Cyan
-Write-Host "   管理面板: http://localhost:$($env:HOST_PORT ?? 3000)" -ForegroundColor White
-Write-Host "   API 接口: http://localhost:$($env:HOST_PORT ?? 3000)/v1" -ForegroundColor White
+Write-Host "   管理面板: http://localhost:9528" -ForegroundColor White
+Write-Host "   API 接口: http://localhost:9528/v1" -ForegroundColor White
 Write-Host " "
 Write-Host "👤 默认管理员账号:" -ForegroundColor Cyan
 Write-Host "   用户名: root" -ForegroundColor White
